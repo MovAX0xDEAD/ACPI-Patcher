@@ -1,0 +1,41 @@
+!BAT
+errorcheck off
+debug 0
+
+set path=/ACPI_PAT/
+set acpi_pat=%path%acpi_pat.cfg
+insmod (fd0)/fat  > nul
+
+write --offset=0x0    (md)0x800+1  \xeb\xfe > nul
+write --offset=0xc    (md)0x800+1  \2\2\1\0\2\xf0\0\x80\x16\xf0\x09\0\x24\0\2 > nul # 2.88Mb
+write --offset=0x26   (md)0x800+1  \x29\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20FAT12 > nul
+write --offset=0x1fe  (md)0x800+1  \x55\xAA
+write --offset=0x200  (md)0x800+2  \xf0\xff\xff > nul #fat1
+write --offset=0x1400 (md)0x800+11 \xf0\xff\xff > nul #fat2
+write --offset=0x2600 (md)0x800+20 \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0 > nul #root dir
+write --offset=0x2610 (md)0x800+20 \0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0 > nul #root dir
+map --mem (md)0x800+5760 (fd1)
+map --hook
+
+cat --length=0  %acpi_pat% > nul
+set /a pat_len=*0x8290 > nul
+cat %acpi_pat% > (md)0x200+1
+set acpi_pat=(md)0x200+1
+cat --locate=\x0d --replace=\x0a %acpi_pat% > nul
+write --offset=%pat_len%  %acpi_pat% \x0a\0 > nul
+
+set skip=0
+:loop
+set skipline=0
+set filename=
+cat --locate=\x0a --skip=%skip% --number=1 %acpi_pat% > nul || goto exit
+set /a len=%?%-%skip% > nul
+cat --locate=[ --skip=%skip% --number=1 --length=%len% %acpi_pat% > nul && set skipline=1
+cat --locate=; --skip=%skip% --number=1 --length=%len% %acpi_pat% > nul && set skipline=1
+cat --locate=# --skip=%skip% --number=1 --length=%len% %acpi_pat% > nul && set skipline=1
+if %skipline%==0 cat --skip=%skip% --length=%len% %acpi_pat% | set filename=
+if not "%filename%"=="" if exist %path%%%filename% fat copy /o %path%%%filename% (fd1)
+set /a skip=%skip%+1+%len% > nul
+goto loop
+
+:exit

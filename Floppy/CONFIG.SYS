@@ -1,0 +1,4 @@
+device=HIMEMX.EXE /MAX=64000 /NOABOVE16
+dos=high
+lastdrive=r
+

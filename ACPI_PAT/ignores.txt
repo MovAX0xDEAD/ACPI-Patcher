@@ -1,0 +1,1 @@
+[BNUM] Namespace lookup failure, AE_ALREADY_EXISTS

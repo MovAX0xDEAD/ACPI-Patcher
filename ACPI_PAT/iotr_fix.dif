@@ -1,0 +1,39 @@
+--- DSDT.dsl
++++ DSDT.dsl
+@@ -1,36 +1,13 @@
+                 AMI1 = ITA1 /* \ITA1 */
+                 AMA1 = ITA1 /* \ITA1 */
+                 AMI2 = ITA2 /* \ITA2 */
+                 AMA2 = ITA2 /* \ITA2 */
+                 AMI3 = ITA3 /* \ITA3 */
+                 AMA3 = ITA3 /* \ITA3 */
+-                If ((ITS0 == One))
+-                {
+-                    ConcatenateResTemplate (Local0, BUF0, Local1)
+-                    Local0 = Local1
+-                }
+-
+-                If ((ITS1 == One))
+-                {
+-                    ConcatenateResTemplate (Local0, BUF1, Local1)
+-                    Local0 = Local1
+-                }
+-
+-                If ((ITS2 == One))
+-                {
+-                    ConcatenateResTemplate (Local0, BUF2, Local1)
+-                    Local0 = Local1
+-                }
+-
+-                If ((ITS3 == One))
+-                {
+-                    ConcatenateResTemplate (Local0, BUF3, Local1)
+-                    Local0 = Local1
+-                }
+
+                 Return (Local0)
+             }
+         }
+     }
+ 
+     Scope (_SB.PCI0.LPCB)
