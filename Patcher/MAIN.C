@@ -26,7 +26,7 @@
 #define E820_CHUNK	128
 #define MAXRANGES	64
 #define PTR_TO_PTR64(x)	(((unsigned long long)x) & 0x00000000FFFFFFFF)
-#define ALIGN(x,y)	( ((int)x + y - 1)&(~(y - 1)) )
+#define ALIGN(x,y)	( ((int)x + (y) - 1)&(~((y) - 1)) )
 #define MAXIMUM_GRUB4DOS_DRIVE_MAP_SLOTS 8
 
 #define LOG(...) fprintf(file_log, __VA_ARGS__)
@@ -211,7 +211,7 @@ static int		dub_max;
 uint32_t		shift_pressed;
 FILE 			*file_log;
 
-void err_exit(int code); // forward def
+void err_exit(int code) __attribute__ ((noreturn)); // forward def
 
 void make_grubmenu() {
  char	buf[16];
@@ -290,8 +290,6 @@ void split_to_lines (FILE *f) {
 	ch=fgetc(f);
 	break;
   case '\x20':
-	ch=fgetc(f);
-	break;
   case '\x0d':
 	ch=fgetc(f);
 	break;
@@ -319,7 +317,7 @@ char* get_line (unsigned int curline) {
 void split (char *s1) {
  char	*where;
 
- where =strstr(s1, "/");
+ where =strchr(s1, '/');
  if (where == NULL) {printf("ACPI Patcher Error: '/' not found in hex string %s in file %s\n", s1, cur_file); err_exit(1);}
  unsigned int len = strlen (s1);
  unsigned int len_find= where-s1;
@@ -335,7 +333,7 @@ void split (char *s1) {
 char* split2 (char const *s1) {
  char	*where;
 
- where =strstr(s1, ","); // "iotr_fix.dif,201904"
+ where =strchr(s1, ','); // "iotr_fix.dif,201904"
  if (where == NULL) { return NULL; }
  return where+1; // "201904"
 
@@ -529,14 +527,8 @@ void e820_init(void) {
 			reg.d.eax != 0x534d4150 ||
 			reg.d.ecx < 20) { break; }
 
-			if (reg.d.ecx >= 24) {
-				LOG("%d %016llx-%016llx (%016llx) t=%d [%x]",
-				reg.d.ebx, ed.base, ed.base + ed.len, ed.len, ed.type, ed.extattr);
-			} else {
-				LOG("%d %016llx-%016llx (%016llx) t=%d",
-				reg.d.ebx, ed.base, ed.base + ed.len, ed.len, ed.type);
-				ed.extattr = 1;
-			}
+			LOG("%d %016llx-%016llx (%016llx) t=%d",
+			reg.d.ebx, ed.base, ed.base + ed.len, ed.len, ed.type);
 
 			type = ed.type - 1;
 			if (type < sizeof(e820_types) / sizeof(e820_types[0]))
@@ -555,8 +547,8 @@ uint32_t find_reserv(uint32_t addr, uint32_t *size) {
 		if (addr >= e820_ranges[i].start &&
 			addr <= e820_ranges[i].end &&
 			(e820_ranges[i].type == 2 || e820_ranges[i].type == 3 || e820_ranges[i].type == 4) ) {
-				LOG("reserved mem begin=%08x ",e820_ranges[i].start);
-				LOG("size=%x \n",e820_ranges[i].len);
+				LOG("reserved mem begin=%16llx ", e820_ranges[i].start);
+				LOG("size=%16llx \n", e820_ranges[i].len);
 			*size = e820_ranges[i].len;
 			return e820_ranges[i].start;
 		}
@@ -622,7 +614,7 @@ acpi_rsdp_v20_t* acpi_find_rsdp (void) {
 	HEXLOG(ebda_copy,"",36 /* ebda_size */);
  LMB_copy=malloc(LMB_size);
  dosmemget((uint32_t)LMB_start,LMB_size,LMB_copy);
-	LOG("LMB_copy = %8x \n",LMB_copy);
+	LOG("LMB_copy = %8p \n",LMB_copy);
 	HEXLOG(LMB_copy,"", 36 /* LMB_size */);
 
  // search EBDA
@@ -686,13 +678,13 @@ uint32_t mapaddr (uint32_t addr) {
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"
-int acpi_init () {
+void acpi_init () {
 
 	_farsetsel(_dos_ds);
 	glb_rsdp = acpi_find_rsdp();
 
 	if (glb_rsdp == NULL) {printf("ACPI Patcher Error: RSDP table not found in DOS memory\n"); err_exit(1);}
-		LOG("glb_rsdp maped=%x \n",glb_rsdp);
+		LOG("glb_rsdp maped=%p \n",glb_rsdp);
 		HEXLOG((uint8_t *)glb_rsdp, "", sizeof(acpi_rsdp_v20_t));
 		LOG("glb_rsdp raw=%08x \n",glb_raw_rsdp);
 		HEXLOG_RAW(_dos_ds, (uint8_t *)glb_raw_rsdp, "", sizeof(acpi_rsdp_v20_t));
@@ -744,8 +736,8 @@ int acpi_init () {
 			if (glb_raw_xsdt < raw_base || glb_raw_xsdt > (raw_base+raw_size)) {printf("ACPI Patcher Error: xsdt addr is in diff reserved memory\n"); err_exit(1);}
 				LOG("glb_raw_xsdt=%08x \n", glb_raw_xsdt);
 			glb_xsdt=(acpi_xsdt_t *) mapaddr(glb_raw_xsdt);
-				LOG("glb_xsdt=%x \n", glb_xsdt);
-				LOG("xsdt_mem maped:\n");
+				LOG("glb_xsdt=%p \n", glb_xsdt);
+				LOG("xsdt_mem maped: \n");
 				HEXLOG((char *)glb_xsdt,"",glb_xsdt->header.length);
 			xsdt_entries = (glb_xsdt->header.length - sizeof(acpi_header_t))/8;
 			acpi_revision = 2;
@@ -947,6 +939,7 @@ if (multi == true && dub_max == 1) {
 
     int size=p_acpi->length;
 	newnode=calloc(sizeof(tree_t), 1);
+    if (!newnode) { printf("ACPI Patcher Error: Error allocating %d bytes \n", sizeof(tree_t)); err_exit(1);}
 		//LOG("alloc newnode = %8x, prevnode= %8x \n", newnode, prevnode);
 	strcpy(newnode->name,p_tablename);
 	newnode->size=size;
@@ -971,7 +964,9 @@ void upd_node (tree_t *p_table, char *p_newmem, int newsize) {
 		p_table->ptr=tmpmem;
 	}
 		//void* old=p_table->ptr;
-	p_table->ptr=realloc(p_table->ptr,newsize);
+    void *tmp =realloc(p_table->ptr,newsize);
+    if (!tmp) { printf("ACPI Patcher Error: Error reallocating %d bytes \n", newsize); err_exit(1);}
+	p_table->ptr=tmp;
 		//LOG("realloc old= %8x new= %8x oldsize=%d  new size=%d \n", old, p_table->ptr, p_table->size, newsize);
 	memcpy(p_table->ptr,p_newmem,newsize);
 	p_table->changed=1;
@@ -1186,6 +1181,7 @@ void upd_facp(tree_t *node) {
 		facp0_moved = 1;
 
 		newnode=calloc(sizeof(tree_t), 1);
+        if (!newnode) { printf("ACPI Patcher Error: Error allocating %d bytes \n", sizeof(tree_t)); err_exit(1);}
 		strcpy(newnode->name,"FACP");
 		newnode->size=glb_facp0->header.length;
 		newnode->changed=1;
@@ -1215,6 +1211,7 @@ void upd_facp(tree_t *node) {
 		facp1_moved = 1;
 		
 		newnode=calloc(sizeof(tree_t), 1);
+        if (!newnode) { printf("ACPI Patcher Error: Error allocating %d bytes \n", sizeof(tree_t)); err_exit(1);}
 		strcpy(newnode->name,"FACP");
 		newnode->size=glb_facp1->header.length;
 		newnode->changed=1;
@@ -1327,6 +1324,7 @@ int get_resv_selector() {
 			// search 9000-A000 range
 			slotsaddr = 0;
 			low_copy=malloc(INT13_RANGE_SZ);
+            if (!low_copy) { printf("ACPI Patcher Error: Error allocating %d bytes \n", INT13_RANGE_SZ); err_exit(1);}
 			dosmemget((uint32_t)INT13_RAM_LOW,INT13_RANGE_SZ,low_copy);
 			for ( ptr = low_copy;  ptr < low_copy + (INT13_RANGE_SZ - 0x16); ptr++) {
 				if ( memcmp(ptr, "$INT13SFGRUB4DOS", 16) == 0)
@@ -1336,7 +1334,7 @@ int get_resv_selector() {
 						break;
 				}
 			}
-			if (low_copy)  free(low_copy);
+			free(low_copy);
 			if (slotsaddr == 0) {printf("ACPI Patcher Error: Grub4Dos INT13 handler not found in range 9000-A000\n"); err_exit(1);}
 	}
 		LOG("int13vec maped %08x : \n", int13addr);
@@ -1347,7 +1345,7 @@ int get_resv_selector() {
 		HEXLOG((char *) &buf_slots[1], "", sizeof(GRUB4DOS_DRIVE_MAP_SLOT));
 		HEXLOG((char *) &buf_slots[2], "", sizeof(GRUB4DOS_DRIVE_MAP_SLOT));
 	for (i=0; i<MAXIMUM_GRUB4DOS_DRIVE_MAP_SLOTS && buf_slots[i].to_drive; i++) {
-			LOG("slot %d from=%2d start= %016x\n", i, buf_slots[i].from_drive, buf_slots[i].start_sector*512);
+			LOG("slot %d from=%2d start= %016llx\n", i, buf_slots[i].from_drive, buf_slots[i].start_sector*512);
 
 		if (buf_slots[i].from_drive == 00 && buf_slots[i].to_drive == 0xFF) {
 			fd0= i;
@@ -1471,12 +1469,12 @@ void finish() {
 	node=ROOT_TREE;
 	while (node) {
 		if (node->ptr && node->changed && node->ptr != (void *) -1) {
-			p=node->ptr;
 			sprintf(s1,"%d",i);
 			strcpy(s, "tbl_res");
 			strcat(s, s1);
 			strcat(s, ".bin");
 			outfile=fopen(s,"wb");
+            if (!outfile) { printf("ACPI Patcher Error: Error opening %s \n", s); err_exit(1);}
 			fwrite(node->ptr, 1, node->size, outfile);
 			fclose(outfile);
 			i++;
@@ -1562,7 +1560,7 @@ if (multi==1) {
 			}
 
 			if (res) {
-					LOG("table %s changed, new size= %d \n", p_tablename, size_src);
+					LOG("table %s changed, new size= %u \n", p_tablename, size_src);
 				upd_node(p_table, *p_mem, size_src);
 			}
 		}
@@ -1582,7 +1580,7 @@ else {
 		}
 
 		if (res) {
-				LOG("table %s changed, new size= %d \n", p_tablename, size_src);
+				LOG("table %s changed, new size= %u \n", p_tablename, size_src);
 			upd_node(p_table, *p_mem, size_src);
 		}
 	}
@@ -1608,6 +1606,7 @@ void binpatch (const char *p_tablename, const char *filename) {
  fseek(f, 0, SEEK_SET);
   
  mem= malloc(size);
+ if (!mem) { printf("ACPI Patcher Error: Error allocating %d bytes \n", size); err_exit(1);}
  loaded=fread(mem, 1, size, f);
  if (size != loaded)  { printf("ACPI Patcher Error: Failed loading %s, size mitmatch \n", filename); err_exit(1);}
  
@@ -1687,6 +1686,7 @@ void difpatch (const char *p_tablename, const char *filename) {
 	binpatch(p_tablename, target_p.aml)	
 	*/
 	outfile=fopen("target.bin","wb");
+    if (!outfile) { printf("ACPI Patcher Error: Error opening target.bin \n"); err_exit(1);}
 	fwrite(p_table->ptr, 1, p_table->size, outfile);
 	fclose(outfile);
 
@@ -1745,6 +1745,7 @@ void difpatch (const char *p_tablename, const char *filename) {
 			p_table=find_node(s, true);
 			if (p_table) {
 				outfile=fopen(s3,"wb");
+                if (!outfile) { printf("ACPI Patcher Error: Error opening %s \n", s3); err_exit(1);}
 				fwrite(p_table->ptr, 1, p_table->size, outfile);
 				fclose(outfile);
 			}
@@ -1757,6 +1758,7 @@ void difpatch (const char *p_tablename, const char *filename) {
 				strcpy(list3[j], "DSDT.bin"); list2[j]= list3[j]; j++;
 
 			outfile=fopen("DSDT.bin","wb");
+            if (!outfile) { printf("ACPI Patcher Error: Error opening DSDT.bin \n"); err_exit(1);}
 			fwrite(p_table->ptr, 1, p_table->size, outfile);
 			fclose(outfile);
 		}
